@@ -162,21 +162,52 @@ buildRpm();
 buildFuel();
 buildOil();
 
-// ===================== POSISI JARUM (langsung, tanpa animasi) =====================
+// ===================== POSISI JARUM =====================
 function speedAngle(value) {
     const v = Math.max(0, Math.min(CONFIG.maxSpeed, value));
     return G.speed.start + (v / CONFIG.maxSpeed) * G.speed.sweep;
 }
 
-function setSpeedNeedle(value) { setRot(elNeedle, G.speed.cx, G.speed.cy, speedAngle(value)); }
-function setRpmNeedle(p)  { setRot(elRpmNeedle, G.rpm.cx, G.rpm.cy, G.rpm.start + p * G.rpm.sweep); }
-function setFuelNeedle(p) { setRot(elFuelNeedle, G.fuel.cx, G.fuel.cy, 60 - p * 120); }
-function setOilNeedle(p)  { setRot(elOilNeedle, G.oil.cx, G.oil.cy, 60 - p * 120); }
+// Jarum bergerak halus 60 FPS: game cuma kirim nilai target (biasanya jarang),
+// lalu jarum mengejar target tiap frame dengan kecepatan yang tidak bergantung FPS.
+const needles = {
+    speed: { el: elNeedle,     cx: G.speed.cx, cy: G.speed.cy, cur: G.speed.start, target: G.speed.start, rate: 14 },
+    rpm:   { el: elRpmNeedle,  cx: G.rpm.cx,   cy: G.rpm.cy,   cur: G.rpm.start,   target: G.rpm.start,   rate: 18 },
+    fuel:  { el: elFuelNeedle, cx: G.fuel.cx,  cy: G.fuel.cy,  cur: -60,           target: -60,           rate: 10 },
+    oil:   { el: elOilNeedle,  cx: G.oil.cx,   cy: G.oil.cy,   cur: 60,            target: 60,            rate: 10 }
+};
 
+function setSpeedNeedle(value) { needles.speed.target = speedAngle(value); }
+function setRpmNeedle(p)  { needles.rpm.target = G.rpm.start + p * G.rpm.sweep; }
+function setFuelNeedle(p) { needles.fuel.target = 60 - p * 120; }
+function setOilNeedle(p)  { needles.oil.target = 60 - p * 120; }
+
+let lastFrame = performance.now();
+function frame(now) {
+    const dt = Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    for (const k in needles) {
+        const n = needles[k];
+        if (n.cur !== n.target) {
+            n.cur += (n.target - n.cur) * (1 - Math.exp(-dt * n.rate));
+            if (Math.abs(n.target - n.cur) < 0.02) n.cur = n.target;
+            setRot(n.el, n.cx, n.cy, n.cur);
+        }
+    }
+    requestAnimationFrame(frame);
+}
+
+// Posisi awal (langsung, tanpa gerak)
 setSpeedNeedle(0);
 setRpmNeedle(0);
 setFuelNeedle(1);
 setOilNeedle(0);
+for (const k in needles) {
+    const n = needles[k];
+    n.cur = n.target;
+    setRot(n.el, n.cx, n.cy, n.cur);
+}
+requestAnimationFrame(frame);
 
 // ===================== HELPER =====================
 // Mendeteksi nilai TRUE/LOCKED dari JGRP (1, "1", true, "true", atau 2)
