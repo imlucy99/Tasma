@@ -1,11 +1,11 @@
 // ===================== KONFIGURASI =====================
 const CONFIG = {
-    unit: 'KMH',      // 'MPH' atau 'KMH'
-    maxSpeed: 240,    // Angka maksimal di dial (MPH: ganti ke 160)
+    unit: 'MPH',      // 'MPH' atau 'KMH'
+    maxSpeed: 160,    // Angka maksimal di dial (KMH: ganti ke 240)
     majorStep: 20,    // Jarak angka besar
     midStep: 10,      // Jarak tick sedang
     minorStep: 5,     // Jarak tick halus
-    redStart: 200,    // Tick setelah angka ini berwarna merah
+    redStart: 140,    // Tick setelah angka ini berwarna merah
     rpmMax: 8,        // Skala RPM (x1000 r/min)
     rpmRed: 7.5,      // Mulai zona merah RPM
     oilMax: 150,      // Skala oli (PSI)
@@ -21,12 +21,11 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const G = {
     speed: { cx: 514, cy: 297, r: 222, start: 135, sweep: 270 },
     rpm:   { cx: 198, cy: 349, r: 140, start: 150, sweep: 150 },
-    fuel:  { cx: 794, cy: 212, r: 78 },   // E = +45deg, F = -45deg
-    oil:   { cx: 789, cy: 403, r: 78 }    // 0 = +45deg, max = -45deg
+    fuel:  { cx: 794, cy: 212, r: 84 },   // E = +60deg, F = -60deg
+    oil:   { cx: 789, cy: 403, r: 84 }    // 0 = +60deg, max = -60deg
 };
 
 // Elemen DOM
-const elSpeed = document.getElementById('speed-display');
 const elGear = document.getElementById('gear');
 const elOdo = document.getElementById('odometer');
 const elNeedle = document.getElementById('needle');
@@ -92,14 +91,7 @@ function buildSpeed() {
     const s = G.speed;
     const ticks = document.getElementById('speed-ticks');
     const labels = document.getElementById('speed-labels');
-    const red = document.getElementById('speed-red');
     const ang = v => s.start + (v / CONFIG.maxSpeed) * s.sweep;
-
-    // Pita merah zona bahaya
-    red.appendChild(svgEl('path', {
-        d: arcPath(s.cx, s.cy, s.r - 32, ang(CONFIG.redStart + 5), ang(CONFIG.maxSpeed)),
-        class: 'red-band'
-    }));
 
     for (let v = 0; v <= CONFIG.maxSpeed; v += CONFIG.minorStep) {
         const a = ang(v);
@@ -143,7 +135,7 @@ function buildFuel() {
     document.getElementById('fuel-rim').setAttribute('d', arcPath(g.cx, g.cy, 90, -100, 100));
 
     for (let i = 0; i <= 8; i++) {
-        const a = 45 - (i / 8) * 90;
+        const a = 60 - (i / 8) * 120;
         const major = i % 4 === 0;
         line(ticks, g.cx, g.cy, g.r, g.r - (major ? 13 : 8), a,
             'mini-tick' + (major ? ' major' : '') + (i === 0 ? ' red' : ''));
@@ -157,11 +149,11 @@ function buildOil() {
     document.getElementById('oil-rim').setAttribute('d', arcPath(g.cx, g.cy, 90, -100, 100));
 
     for (let p = 0; p <= CONFIG.oilMax; p += 10) {
-        const a = 45 - (p / CONFIG.oilMax) * 90;
+        const a = 60 - (p / CONFIG.oilMax) * 120;
         const major = p % 50 === 0;
         line(ticks, g.cx, g.cy, g.r, g.r - (major ? 13 : 8), a,
             'mini-tick' + (major ? ' major' : '') + (p <= 10 ? ' red' : ''));
-        if (major) text(labels, g.cx, g.cy, g.r - 28, a, p, 'oil-num');
+        if (major) text(labels, g.cx, g.cy, g.r - 30, a, p, 'oil-num');
     }
 }
 
@@ -178,8 +170,8 @@ function speedAngle(value) {
 
 function setSpeedNeedle(value) { setRot(elNeedle, G.speed.cx, G.speed.cy, speedAngle(value)); }
 function setRpmNeedle(p)  { setRot(elRpmNeedle, G.rpm.cx, G.rpm.cy, G.rpm.start + p * G.rpm.sweep); }
-function setFuelNeedle(p) { setRot(elFuelNeedle, G.fuel.cx, G.fuel.cy, 45 - p * 90); }
-function setOilNeedle(p)  { setRot(elOilNeedle, G.oil.cx, G.oil.cy, 45 - p * 90); }
+function setFuelNeedle(p) { setRot(elFuelNeedle, G.fuel.cx, G.fuel.cy, 60 - p * 120); }
+function setOilNeedle(p)  { setRot(elOilNeedle, G.oil.cx, G.oil.cy, 60 - p * 120); }
 
 setSpeedNeedle(0);
 setRpmNeedle(0);
@@ -204,19 +196,7 @@ function clamp01(n) {
 
 // 1. Kecepatan (input m/s, jarum analog + 3 digit)
 window.setSpeed = function(speed) {
-    const value = Math.round(Number(speed || 0) * SPEED_FACTOR);
-    setSpeedNeedle(value);
-
-    if (!elSpeed) return;
-    const padded = String(Math.min(value, 999)).padStart(3, '0');
-
-    if (value < 10) {
-        elSpeed.innerHTML = `<span class="dim">${padded.slice(0, 2)}</span><span class="bright">${padded.slice(2)}</span>`;
-    } else if (value < 100) {
-        elSpeed.innerHTML = `<span class="dim">${padded.slice(0, 1)}</span><span class="bright">${padded.slice(1)}</span>`;
-    } else {
-        elSpeed.innerHTML = `<span class="bright">${padded}</span>`;
-    }
+    setSpeedNeedle(Math.round(Number(speed || 0) * SPEED_FACTOR));
 };
 
 // 2. RPM (0.0 - 1.0)
@@ -274,16 +254,9 @@ window.setHeadlights = function(state) {
     if (high) high.className = (val === 2) ? 'icon-item high-beam' : 'icon-item';
 };
 
-// 9. Lampu Sein
-window.setLeftIndicator = function(state) {
-    const el = document.getElementById('indicator-left');
-    if (el) el.className = isTrueValue(state) ? 'signal active' : 'signal';
-};
-
-window.setRightIndicator = function(state) {
-    const el = document.getElementById('indicator-right');
-    if (el) el.className = isTrueValue(state) ? 'signal active' : 'signal';
-};
+// 9. Lampu Sein dihapus dari tampilan (fungsi dibiarkan kosong agar panggilan dari game tidak error)
+window.setLeftIndicator = function() {};
+window.setRightIndicator = function() {};
 
 // 10. Seatbelt
 window.setSeatbelts = function(state) {
@@ -308,7 +281,7 @@ window.addEventListener('message', function(event) {
 
 // Nilai contoh untuk preview di browser: buka index.html?preview&demo
 if (new URLSearchParams(location.search).has('demo')) {
-    setSpeed(23);          // ~83 km/h
+    setSpeed(23);          // ~51 mph
     setRPM(0.45);
     setFuel(0.7);
     setHealth(0.8);
